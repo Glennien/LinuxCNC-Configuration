@@ -13,6 +13,7 @@ loadrt pid names=pid.x,pid.x2,pid.y,pid.z,pid.s
 setp    hm2_7i96s.0.pwmgen.pwm_frequency 10000
 setp    hm2_7i96s.0.pwmgen.pdm_frequency 6000000
 
+loadusr -Wn arduino arduino-connector
 
 addf hm2_7i96s.0.read          servo-thread
 addf motion-command-handler   servo-thread
@@ -62,37 +63,39 @@ net estop-ext <= logic.0.and
 #net estop-ext     <=  hm2_7i96s.0.inm.00.input-04
 
 # --- PROBE-IN ---
+# Load or2 component for combining toolsetter + probe
+loadrt or2 count=1
+addf or2.0 servo-thread
 
-Debouncing component for probing
+#Debouncing component for probing
 loadrt debounce cfg=1
 addf debounce.0 servo-thread
 setp debounce.0.delay 2
 
 
-loadrt or2 count=1
-addf or2.0 servo-thread
-
-#net probe-in     <=  hm2_7i96s.0.inm.00.input-05-not
+#Get inputs from probe and toolsetter
+net probe-in     <=  hm2_7i96s.0.inm.00.input-05-not
 net tool_sensor-in <= hm2_7i96s.0.inm.00.input-08-not
 
+#Send inputs to or2 component
 net tool_sensor-in => or2.0.in0
 net probe-in => or2.0.in1
 net probe-tool <= or2.0.out
 
-net probe-tool     =>  motion.probe-input
+#Take output from or2 component and debounce it
+net probe-tool debounce.0.0.in <= or2.0.out
 
-net probe-in debounce.0.0.out => motion.probe-input
+#Send the debounced signal to probe pin.
+net debounced_probe debounce.0.0.out => motion.probe-input
 
 
-#raw_probe will read the input signal and pass it on
-net debounce-probe-in debounce.0.0.in <= hm2_7i96s.0.inm.00.input-05-not
 
 # --- DRIVE ALARMS ---
 
 # --- X1/X2 DRIVE ALARM - SHARED
 net x-fault => joint.0.amp-fault-in <= hm2_7i96s.0.inm.00.input-06
 
-# --- Y DRIVE ALARM
+# --- Y/Z DRIVE ALARM
 net y-fault => joint.2.amp-fault-in <= hm2_7i96s.0.inm.00.input-07
 
 
@@ -412,4 +415,3 @@ net tool-change-confirmed   iocontrol.0.tool-changed      <=  hal_manualtoolchan
 net tool-number             iocontrol.0.tool-prep-number  =>  hal_manualtoolchange.number
 net tool-prepare-loopback   iocontrol.0.tool-prepare      =>  iocontrol.0.tool-prepared
 
-loadusr arduino-connector
